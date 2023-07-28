@@ -6,77 +6,93 @@ import * as Medialibrary from 'expo-media-library'
 import { Camera } from 'expo-camera';
 import * as Location from 'expo-location';
 import PicAndLocation from './src/components/PicAndLocation';
-// import axios from 'axios';
 
-const API = 'http://localhost:5000/api/v1/mycamera';
 const API_URL = 'http://192.168.1.9:5000/api/v1/mycamera';
 
 export default function App() {
-  const [hasCameraPermissions, setHasCameraPermissions] = useState(null);
-  const [toggleCamera, setToggleCamera] = useState(false);
-  const [image, setImage] = useState(null);
-  const [currentLocation, setCurrentLocation] = useState();
-  const cameraRef = useRef(null);
 
-  useEffect(  () => {
-    getPictures();
-  }, [])
+  const cameraRef = useRef();
+  const [hasCameraPermissions, setHasCameraPermissions] = useState();
+
+  const [image, setImage] = useState();
+
+  const [toggleCamera, setToggleCamera] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState();
+
+  // useEffect(  () => {
+  //   getPictures();
+  // }, [])
 
   const getCameraPermissions = async () => {
-    Medialibrary.requestPermissionsAsync();
-    const cameraStatus = await Camera.requestCameraPermissionsAsync();
-    let {status} = await Location.requestForegroundPermissionsAsync();
-    if(status !== 'granted') {
-      alert('Please allow permissions in settings')
-      return;
-    } 
 
-    setHasCameraPermissions(cameraStatus.status === 'granted');
+    try {
+      const [cameraStatus, locationStatus] = await Promise.all([
+        Camera.requestCameraPermissionsAsync(),
+        Location.requestForegroundPermissionsAsync(),
+      ]); 
+
+      if(cameraStatus.status === 'granted' && locationStatus.status === 'granted') {
+        setHasCameraPermissions(true)
+      } else {
+        alert('Please allow all the permissions!')
+      }
+ 
+    } catch(e) {
+      console.log('Error requesting permissions: ', e)
+    }
+
+    // const cameraStatus = await Camera.requestCameraPermissionsAsync();
+    // const mediaLibraryPermission = await Medialibrary.requestPermissionsAsync();
+
+    // setHasCameraPermissions(cameraStatus.status === 'granted');
+    // let {status} = await Location.requestForegroundPermissionsAsync();
+    // if(status !== 'granted') {
+    //   alert('Please allow location permissions in settings')
+    //   return;
+    // } 
   }
 
-
-  const handleOpenCamera = async () => {
+  const handleOpenCamera = () => {
     getCameraPermissions();
-    setToggleCamera(true)
+
+    if(hasCameraPermissions) {
+      setToggleCamera(true)
+    }
     
   }
 
   const takePicture = async () => {
+
     let currentLocation = await Location.getCurrentPositionAsync({});
     setCurrentLocation(currentLocation);
+
     if(cameraRef) {
       try {
-        const data = await cameraRef.current.takePictureAsync();
+        const data = await cameraRef.current.takePictureAsync({});
         setImage(data.uri)
+        setToggleCamera(false);
+        savePic(data.uri, currentLocation);
+
       } catch(e) {
-        console.log(e)
+        console.log('Error during taking picture: ', e)
       }
     }
-    setToggleCamera(false);
-    savePic();
+
   }
 
-  const savePic = async () => {
-    if(image) {
+  const savePic = async (pic, location) => {
+    if(pic) {
       try {
-        await Medialibrary.createAssetAsync(image);
+        // El error esta aqui creo. 
+        await Medialibrary.createAssetAsync(pic);
         alert('Pic Saved!');
-        sendData();
+        sendData(pic, location);
       } catch(e) {
-        console.log(e)
+        console.log('Error during saving picture: ', e)
       }
     }
   }
 
-//   const getData = async () => {
-//     try {
-//       const res = await fetch(API_URL);
-//       const data = res.json();
-//       console.log(data)
-//     }  catch(e) {
-//     console.log(e)
-//   }
-// }
 
 const getPictures = () => {
   fetch(API_URL)
@@ -90,14 +106,14 @@ const getPictures = () => {
     .catch( (error) => console.log(error) )
 }
 
-  const sendData = async () => {
+  const sendData = async (pic, location) => {
 
     const formData = new FormData();
-    formData.append('lat', currentLocation.coords.latitude);
-    formData.append('lon', currentLocation.coords.longitude);
+    formData.append('lat', location.coords.latitude);
+    formData.append('lon', location.coords.longitude);
     formData.append('picture', {
       name: new Date() + "_picture",
-      uri: image,
+      uri: pic,
       type: 'image/jpg'
     })
 
@@ -105,7 +121,6 @@ const getPictures = () => {
       headers: {
         Accept: 'application/json',
         'Access-Control-Allow-Origin': '*',
-        // 'Content-Type': 'multipart/form-data',
       },
       method: 'POST',
       body: formData
@@ -117,16 +132,18 @@ const getPictures = () => {
       console.log(data)
       return data;
     } catch(e) {
-      console.log('Error: ', e)
-    }
-
-      
+      console.log('Error sending request: ', e)
+    }     
   }
+
+ if(hasCameraPermissions === false) {
+  return <Text>No camera permissions granted. Check settings.</Text>
+}
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <Text style={{fontSize: 26}}>My Camera App!</Text>
+      <Text style={styles.title}>My Camera App!</Text>
       {(image && !toggleCamera) &&  <PicAndLocation image={image} location={currentLocation} />}
       { !toggleCamera && <Button onPress={handleOpenCamera} title='Open Camera'></Button>}
       {toggleCamera && <CameraOpen cameraRef={cameraRef} takePic={takePicture} handleClose={() => setToggleCamera(false)} />}
@@ -142,5 +159,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
   },
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+  }
 
 });
