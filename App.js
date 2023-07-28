@@ -33,6 +33,7 @@ export default function App() {
 
       if(cameraStatus.status === 'granted' && locationStatus.status === 'granted') {
         setHasCameraPermissions(true)
+        setToggleCamera(true)
       } else {
         alert('Please allow all the permissions!')
       }
@@ -54,10 +55,11 @@ export default function App() {
 
   const handleOpenCamera = () => {
     getCameraPermissions();
-
-    if(hasCameraPermissions) {
-      setToggleCamera(true)
-    }
+    // console.log("🚀 ~ file: App.js:60 ~ handleOpenCamera ~ hasCameraPermissions:", hasCameraPermissions)
+    // if(hasCameraPermissions) {
+    //   console.log('open')
+    //   setToggleCamera(true)
+    // }
     
   }
 
@@ -85,8 +87,13 @@ export default function App() {
       try {
         // El error esta aqui creo. 
         await Medialibrary.createAssetAsync(pic);
-        alert('Pic Saved!');
-        sendData(pic, location);
+        const response = await sendData(pic, location);
+        if(response) {
+          alert('Pic Saved!');
+        } else {
+          alert('Something went wrong. Try again');
+        }
+        
       } catch(e) {
         console.log('Error during saving picture: ', e)
       }
@@ -108,6 +115,9 @@ const getPictures = () => {
 
   const sendData = async (pic, location) => {
 
+    const abortControler = new AbortController();
+    const signal = abortControler.signal;
+    let timerId;
     const formData = new FormData();
     formData.append('lat', location.coords.latitude);
     formData.append('lon', location.coords.longitude);
@@ -123,17 +133,29 @@ const getPictures = () => {
         'Access-Control-Allow-Origin': '*',
       },
       method: 'POST',
-      body: formData
+      body: formData,
+      signal: signal,
     }
 
     try {
+
+      const timeOut = 3000; 
+      timerId = setTimeout(() => {
+        abortControler.abort()
+      }, timeOut);
+
       const response = await fetch(API_URL, options);
+      if(!response.ok) {
+        throw new Error('Error HTTP: ', response.status)
+      }
       const data = await response.json();
       console.log(data)
       return data;
     } catch(e) {
-      console.log('Error sending request: ', e)
-    }     
+      console.log('Error sending request: ', e);
+    } finally {
+      clearTimeout(timerId)
+    }    
   }
 
  if(hasCameraPermissions === false) {
