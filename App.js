@@ -24,6 +24,7 @@ export default function App() {
   // }, [])
 
   const getCameraPermissions = async () => {
+    Medialibrary.requestPermissionsAsync();
 
     try {
       const [cameraStatus, locationStatus] = await Promise.all([
@@ -89,9 +90,9 @@ export default function App() {
         await Medialibrary.createAssetAsync(pic);
         const response = await sendData(pic, location);
         if(response) {
-          alert('Pic Saved!');
+          alert('Pic Saved and sended!');
         } else {
-          alert('Something went wrong. Try again');
+          alert('Unable to send photo. Try again');
         }
         
       } catch(e) {
